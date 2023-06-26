@@ -1,0 +1,185 @@
+The following devices support Multipath:
+Direct Attached Storage (DAS)
+Storage Area Network (SAN)
+Network Attached Storage (NAS)
+iSCSI Devices
+Fibre Channel (FC) Devices
+SAS Devices
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Do this before we even begin.
+
+# apt update && apt upgrade -y
+# apt install multipath-tools
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Step 1)
+To get the WWIDs of all SCSI devices at once, use a combination of commands to list all SCSI devices and then pass each one to the scsi_id command. 
+I'm assuming your disks all start with sd a,b,c, etc Do this for each node where the disks are included or part of the server OEM. 
+We do not need the hard drives that are part of your server... only the separate equipment listed above.
+
+
+# lsblk
+EXAMPLE DATA RETURNED:
+NAME   MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
+sda      8:0    0 465.8G  0 disk 
+├─sda1   8:1    0   512M  0 part /boot/efi
+├─sda2   8:2    0     1K  0 part 
+└─sda5   8:5    0 465.3G  0 part /
+sdb      8:16   0 931.5G  0 disk 
+└─sdb1   8:17   0 931.5G  0 part /mnt/data
+
+Please paste this or make a note of sda, sdb, etc. We won't be using these for multipathing instead we will use a wildcard to blacklist every disk except blacklist_exceptions.
+This means that if any drive is not listed under "blacklist_exceptions" then no multipathing. Only those on the guest list (blacklist_exceptions) will be allowed in.
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Step 2) 
+Turn on your Above device. In my case DAS is turned on then we open the CLI and type or copy and paste the following to list the wwids:
+
+# bash -c 'for device in /dev/sd*; do echo "Device: $device"; echo "WWID: $(/lib/udev/scsi_id --whitelisted --device=$device)"; done'
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Step 3) Make sure you exclude the following Nodes but not the SAN or any of the above devices.
+
+
+# bash -c 'for device in /dev/sd*; do echo "Device: $device"; echo "WWID: $(/lib/udev/scsi_id --whitelisted --device=$device)"; done'
+
+The output should look like this.
+Device: /dev/sda
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sda1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sda2
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sda3
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdb
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdb1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdb2
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdb3
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdc
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdc1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdc9
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdd
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdd1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdd9
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sde
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sde1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sde9
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdf
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdf1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdf9
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdg
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdg1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdg9
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdh
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdh1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdh9
+WWID: 35000xxxxxxxxxxxx
+
+
+Our Server Node(1) has 8 disks we are NOT using for Multipath.
+These include the following:
+sda which is disk 1
+sdb which is disk 2
+sdc which is disk 3
+sdd which is disk 4
+sde which is disk 5
+sdf which is disk 6
+sdg which is disk 7
+sdh which is disk 8
+
+
+now turn on the next node and again do the following:
+# bash -c 'for device in /dev/sd*; do echo "Device: $device"; echo "WWID: $(/lib/udev/scsi_id --whitelisted --device=$device)"; done'
+
+The output should look like this.
+Device: /dev/sda
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sda1
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sda2
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sda3
+WWID: 35000xxxxxxxxxxxx
+Device: /dev/sdb
+you get this by now.
+
+
+Our Server Node(2) has 8 disks we are NOT using for Multipath.
+These include the following:
+sda which is disk 1
+sdb which is disk 2
+sdc which is disk 3
+sdd which is disk 4
+sde which is disk 5
+sdf which is disk 6
+sdg which is disk 7
+sdh which is disk 8
+
+When done you should have the WWIDs of each Node and your storage Device.
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+All those disks that are NOT from the above devices at the top of this page will be BLACKLISTED by wwid and not a friendly name for clustering reasons.
+
+Here's an example in which we will make a /etc/multipath/multipath.conf later on.
+In this example, all devices are blacklisted by default, but the devices with the specified WWIDs are whitelisted, 
+meaning they will be managed by multipath despite the general blacklist. leave the black list alone as wwid .*
+
+Please note that you'll need to replace the example WWIDs in the blacklist_exceptions section with the actual WWIDs of the devices you want to whitelist.
+After updating the multipath.conf file, you'll need to restart the multipath daemon for the changes to take effect. 
+You can do this with the systemctl restart multipathd command (or service multipathd restart on older systems).
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Step four:
+create the multipath.conf file. 
+# nano /etc/multipath.conf
+
+
+blacklist {
+    wwid .*
+}
+
+blacklist_exceptions {
+    wwid "3600508b400105e210000900000490000"
+    wwid "3600508b400105e210000900000480000"
+}
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+Save the multipath.conf file then 
+
+# systemctl restart multipathd
+
+
+The /etc/multipath/wwids file is automatically generated and maintained by the multipathd daemon. It contains a list of the World Wide Identifiers (WWIDs) for all the multipathed devices that the daemon is managing.
+
+You generally do not need to manually create or edit this file. When you configure multipathing and start the multipathd daemon, it will automatically discover all the multipathed devices, get their WWIDs, and add them to the /etc/multipath/wwids file.
+
+If you want to prevent certain devices from being managed by the multipathd daemon, you can do so by blacklisting them in the /etc/multipath.conf file. The multipathd daemon will then ignore these devices and not add them to the /etc/multipath/wwids file.
+
