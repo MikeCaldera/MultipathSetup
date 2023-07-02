@@ -1,0 +1,22 @@
+# Configuration based on: https://pve.proxmox.com/wiki/ISCSI_Multipath
+# Multipath connectivity requires at least two dedicated NICs for iSCSI
+# Each NIC should be on a separate network and switch for redundancy
+# Nodes 1-3 are not managed by multipath due to OS-level cluster failover
+# After properly configuring the first machine, copy /etc/multipath.conf to all other nodes
+# The proper location is /etc/multipath.conf, not /etc/multipath/multipath.conf
+# Set 'user_friendly_names' to 'no' when using any clusters
+# Start the multipath-tools service on each node with 'systemctl start multipath-tools.service'
+# Multipath is typically used for storage devices, not for operating system disks
+# Therefore, blacklist the WWIDs of the entire node disks. If a node fails, the disks are useless
+# Ensure that no WWIDs are both blacklisted and whitelisted (blacklist_exceptions)
+# Check for and remove any duplicate WWIDs in both sections
+
+# To list ALL the WWIDs of all disks:
+# sudo bash -c 'for device in /dev/sd*; do echo "Device: $device"; echo "WWID: $(/lib/udev/scsi_id --whitelisted --device=$device)"; done'
+
+# To check for any duplicate WWIDs, use either of the commands below:
+# grep -v '^#' /etc/multipath.conf | grep -E '^\".*\"$' | sort | uniq -cd
+# awk -F'"' '/"[a-zA-Z0-9]+"/ {a[$2]++; b[++n]=$2} END {for (i=1; i<=n; i++) if (a[b[i]] > 1) {print "\"" b[i] "\"", "(duplicate)"} else {print "\"" b[i] "\"", "(unique)"}}' /etc/multipath.conf
+
+# Check that multipath is working. DAS must be powered on: /usr/sbin/multipath -ll
+# Count the number of disks in multipath: grep -c '^/' /etc/multipath/wwids
